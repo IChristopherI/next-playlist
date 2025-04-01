@@ -10,9 +10,9 @@ interface Props {
 }
 
 const SideBar: React.FC<Props> = () => {
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(true)
     return (
-        <div className={cn('bg-neutral-800 m-3 p-2 rounded-[10] h-screen duration-200 ', !open ? 'w-16' : 'w-90')}>
+        <div className={cn('bg-neutral-900 m-3 p-2 rounded-[10] h-screen duration-200 ', !open ? 'w-16' : 'w-67')}>
 
             <div className={cn('p-1', open && 'flex justify-between')}>
                 <div >
