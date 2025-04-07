@@ -25,16 +25,17 @@ model User {
   playlists     Playlist[]
   track         Track[]
   subscriptions Subscription[]
-
+  collections   Collection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Track {
   id       Int    @id @default(autoincrement())
+  trackId  Int? @unique
   title    String
   artist   String
-  duration Int // Длительность трека в секундах
+  duration Int // Длительность трека
 
   Url      String?
   UrlImage String?
@@ -46,19 +47,37 @@ model Track {
   user   User?   @relation(fields: [userId], references: [id])
   userId Int?
 
-  playlists Playlist[] @relation("PlaylistTracks")
-
   category   Category? @relation(fields: [categoryId], references: [id])
   categoryId Int?
+  playlists PlaylistTrack[] 
+  collections CollectionTrack[] 
 }
 
-model Category {
+model Collection{
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String?
+  userId    Int?
+
+  token String?
+
+
+  user      User?           @relation(fields: [userId], references: [id])
+  tracks    CollectionTrack[] // Связь с треками через промежуточную таблицу
+
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
-  tracks Track[]
+model CollectionTrack {
+  id         Int      @id @default(autoincrement())
+  collectionId Int
+  trackId    Int
+
+  collection Collection @relation(fields: [collectionId], references: [id])
+  track      Track      @relation(fields: [trackId], references: [id])
+
+  createdAt  DateTime @default(now())
 }
 
 model Playlist {
@@ -68,8 +87,30 @@ model Playlist {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User    @relation(fields: [userId], references: [id])
-  tracks Track[] @relation("PlaylistTracks")
+  
+
+  user      User           @relation(fields: [userId], references: [id])
+  tracks    PlaylistTrack[] // Связь с треками через промежуточную таблицу
+}
+
+model PlaylistTrack {
+  id         Int      @id @default(autoincrement())
+  playlistId Int
+  trackId    Int
+
+  playlist   Playlist @relation(fields: [playlistId], references: [id])
+  track      Track    @relation(fields: [trackId], references: [id])
+
+  createdAt  DateTime @default(now())
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks Track[]
 }
 
 model Subscription {

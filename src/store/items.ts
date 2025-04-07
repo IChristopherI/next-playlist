@@ -1,114 +1,222 @@
 import { create } from "zustand";
-import { getItems } from "../services/items";
+import { addMusic, fetchMysic, getFavorites, getItems } from "../services/items";
+import axios from "axios";
+
+
+interface Track {
+  id: number;
+  title: string;
+  artist: string;
+  duration: number;
+  UrlImage: string;
+  Url: string;
+}
+
+interface CollectionTrack {
+  id: number; // ID связи между коллекцией и треком
+  collectionId: number;
+  trackId: number;
+  track: Track; // Вложенный объект трека
+}
+
+interface Collection {
+  id: number;
+  name: string;
+  userId: number;
+  createdAt: string;
+  updatedAt: string;
+  tracks: CollectionTrack[]; // Массив треков
+}
+
+export type Playlist = {
+  id: number;
+  name: string;
+  description: string;
+  imageUrl: string;
+};
 
 export type ItemState = {
-    id: string;
-    title: string;
-    artist: string;
-    Url: string;
-    UrlImage: string;
-    duration: number;
-}
+  id: string;
+  title: string;
+  artist: string;
+  Url: string;
+  UrlImage: string;
+  duration: number;
+};
 
 export interface UploadStore {
-    loading: boolean;
-    error: boolean;
-    items: ItemState[];
-    audio: HTMLAudioElement | null; //ссылка на аудио
-    isPlaying: boolean;
-    currentSong: ItemState | null; //детали песни
-    currentTime: number; // время текущей песни
+  loading: boolean;
+  error: boolean;
+  items: ItemState[];
+  audio: HTMLAudioElement | null;
+  isPlaying: boolean;
+  currentSong: ItemState | null;
+  currentTime: number;
+  volume: number;
+  duration: number;
+  tracks: ItemState[];
+  myMusic: Playlist[];
+  collections: Collection[];
 
-    volume: number;
-    duration: number;
+  fetchItems: () => Promise<void>;
+  fetchMyMusic: (id: number) => Promise<void>;
+  fetchMyPlaylist: () => Promise<void>;
+  fetchMyFavorites: () => Promise<void>;
+  addToPlaylist: (trackId: number) => Promise<void>;
 
-    fetchItems: () => Promise<void>;
-    togglePlay: (id: string) => void;
-    setCurrentTime: (time: number) => void;
-
-    setVolume: (value: number) => void;
+  playSong: (song: ItemState) => void;
+  togglePlay: (id: string) => void;
+  setCurrentTime: (time: number) => void;
+  setVolume: (value: number) => void;
 }
 
-export const useUploadStore = create<UploadStore>((set,get) => ({
-    loading: true,
-    error: false,
-    items: [],
-    audio: null,
-    isPlaying: false,
-    currentSong: null,
-    currentTime: 0,
-    volume: 1,
-    duration: 0,
 
-    fetchItems: async () => {
-        try {
-            set({ loading: true, error: false });
-            const data = await getItems();
-            set({ items: data });
-        } catch (error) {
-            console.log('Error fetching items:', error);
-            set({ loading: false, error: true });
-        } finally {
-            set({ loading: false });
-        }
-    },
+export const useUploadStore = create<UploadStore>((set, get) => ({
+  loading: true,
+  error: false,
+  items: [],
+  audio: null,
+  isPlaying: false,
+  currentSong: null,
+  currentTime: 0,
+  volume: 1,
+  duration: 0,
+  tracks: [],
+  myMusic: [],
+  myPlaylist: [],
+  collections: [],
 
-    togglePlay: (id) => {
-        set((state) => {
-            const song = state.items.find((item) => item.id === id);
+  
+  playSong: (song) => {
+    const prevAudio = get().audio;
+    prevAudio?.pause();
 
-            if (!song) {
-                console.log('Song not found');
-                return state;
-            }
+    const audio = new Audio(song.Url);
+    audio.volume = get().volume;
+    audio.currentTime = 0;
+    audio.play();
 
-            // Если песня уже проигрывается
-            if (state.isPlaying && state.currentSong?.id === song.id && state.audio) {
-                state.audio.pause();
-                return {
-                    isPlaying: false,
-                    currentTime: state.audio.currentTime,
-                };
-            }
+    audio.ontimeupdate = () => {
+      set({
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+      });
+    };
 
-            // Если песня не проигрывается или выбрана другая песня
-            const audio = state.audio || new Audio(song.Url); //создаем обьект
-            audio.src = song.Url;
-            audio.currentTime = state.currentTime;
-            audio.play();
+    set({
+      audio,
+      currentSong: song,
+      isPlaying: true,
+    });
+  },
 
-            audio.onended = () => {}
+  togglePlay: (id) => {
+    const { currentSong, isPlaying, audio, items, tracks } = get();
+    const allSongs = [...items, ...tracks];
+    const song = allSongs.find((item) => item.id === id);
 
-            audio.ontimeupdate = () => {
-                if (state.isPlaying) {
-                    set({ currentTime: audio!.currentTime, duration:audio.duration });
-                }
-            };
+    if (!song) return console.error("Song not found");
 
-            return {
-                audio,
-                isPlaying: true,
-                currentSong: song,
-            };
-        });
+    if (currentSong?.id === song.id && isPlaying && audio) {
+      audio.pause();
+      set({ isPlaying: false });
+    } else {
+      get().playSong(song);
+    }
+  },
 
+  setCurrentTime: (time) => {
+    const audio = get().audio;
+    if (audio) audio.currentTime = time;
+    set({ currentTime: time });
+  },
 
-    },
-    setCurrentTime(time) {
-        set((state) => {
-            if (state.audio) {
-                state.audio.currentTime = time;
-            }
-            return ({ currentTime: time })
-        })
-    },
+  setVolume: (value) => {
+    const audio = get().audio;
+    if (audio) audio.volume = value;
+    set({ volume: value });
+  },
 
-    setVolume(value) {
-        set((state) => {
-            if (state.audio) {
-                state.audio.volume = value;
-            }
-            return ({ volume: value })
-        })
-    },
+  fetchItems: async () => {
+    try {
+      set({ loading: true, error: false });
+      const data = await getItems();
+      set({ items: data });
+    } catch (err) {
+      console.error("Error fetching items:", err);
+      set({ error: true });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchMyMusic: async (id) => {
+    try {
+      set({ loading: true, error: false });
+      const data = await fetchMysic(id);
+      const tracks = data.tracks.map((item: any) => ({
+        id: item.track.id,
+        title: item.track.title,
+        artist: item.track.artist,
+        Url: item.track.Url,
+        UrlImage: item.track.UrlImage,
+        duration: item.track.duration,
+      }));
+      set({ tracks, myMusic: [data] });
+    } catch (err) {
+      console.error("Error fetching playlist:", err);
+      set({ error: true });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchMyPlaylist: async () => {
+    try {
+      const response = await axios.get("/api/playlist");
+      set({ myMusic: response.data });
+    } catch (err) {
+      console.error("Ошибка при получении плейлистов:", err);
+    }
+  },
+
+  fetchMyFavorites: async () => {
+    try {
+      const data = await getFavorites();
+      const collections = data.map((collection: any) => ({
+        id: collection.id,
+        name: collection.name,
+        userId: collection.userId,
+        createdAt: collection.createdAt,
+        updatedAt: collection.updatedAt,
+        tracks: collection.tracks.map((item: any) => ({
+          id: item.id,
+          collectionId: item.collectionId,
+          trackId: item.trackId,
+          track: {
+            id: item.track.id,
+            title: item.track.title,
+            artist: item.track.artist,
+            Url: item.track.Url,
+            UrlImage: item.track.UrlImage,
+            duration: item.track.duration,
+          },
+        })),
+      }));
+  
+      set({ collections });
+    } catch (err) {
+      console.error("Ошибка при получении избранного:", err);
+    }
+  },
+
+  addToPlaylist: async (trackId) => {
+    try {
+     await addMusic(trackId);
+    } catch (err) {
+      console.error("Ошибка при добавлении трека:", err);
+    } finally {
+      set({ loading: false });
+    }
+  },
 }));
